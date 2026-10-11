@@ -1,7 +1,7 @@
-import { macroSampler, PROVISIONAL_MACRO, ramadanShare, seasonality, deterministicMacro, type MacroParams } from './scenario'
+import { macroSampler, DEFAULT_MACRO, ramadanShare, seasonality, deterministicMacro, type MacroParams } from './scenario'
 import { mulberry32 } from './rng'
 
-const P = PROVISIONAL_MACRO
+const P = DEFAULT_MACRO
 
 describe('ramadanShare', () => {
   it('covers Feb/Mar 2026 and nothing in Aug 2026', () => {
@@ -42,6 +42,8 @@ describe('macroSampler', () => {
     for (let seed = 1; seed <= 50; seed++) {
       for (const m of s.sample(mulberry32(seed), 36)) {
         expect(m.fx).toBeGreaterThan(0)
+        expect(m.fxOfficial).toBeGreaterThan(0)
+        expect(m.fxOfficial).toBeLessThanOrEqual(m.fx * 1.06)
         expect(m.costIndex).toBeGreaterThan(0)
         expect(m.ppIndex).toBeGreaterThan(0)
         expect(m.gridHours).toBeGreaterThanOrEqual(P.gridHoursMin)
@@ -74,13 +76,14 @@ describe('macroSampler', () => {
   })
   it('with zero volatility and zero jumps the path equals the deterministic path', () => {
     const q: MacroParams = {
-      ...P, fxVolMonthly: 0, fxJumpProb: 0, costInflationVol: 0, ppShockSd: 0, gridHoursSd: 0, dieselVolMonthly: 0,
+      ...P, fxVolMonthly: 0, fxJumpProb: 0, fxSpreadVol: 0, fxSpread0: P.fxSpreadMean, costInflationVol: 0, ppShockSd: 0, gridHoursSd: 0, dieselVolMonthly: 0,
       customsDelayWeeksSd: 0, customsSpikeProb: 0, tariffChangeProb: 0, demandShockProb: 0, competitorPressureVol: 0, supplierDisruptionProb: 0,
     }
     const a = macroSampler(q).sample(mulberry32(1), 12)
     const d = deterministicMacro(q, 12)
     for (let i = 0; i < 12; i++) {
       expect(a[i]!.fx).toBeCloseTo(d[i]!.fx, 6)
+      expect(a[i]!.fxOfficial).toBeCloseTo(d[i]!.fxOfficial, 6)
       expect(a[i]!.costIndex).toBeCloseTo(d[i]!.costIndex, 6)
       expect(a[i]!.demandShock).toBe(1)
       expect(a[i]!.seasonality).toBeCloseTo(d[i]!.seasonality, 9)
@@ -93,5 +96,16 @@ describe('macroSampler', () => {
     // same seed => same FX path; cost index with pass-through must be >= without
     expect(a[35]!.fx).toBeCloseTo(b[35]!.fx, 6)
     expect(a[35]!.costIndex).toBeGreaterThan(b[35]!.costIndex)
+  })
+})
+
+describe('official vs parallel rate', () => {
+  it('premium mean-reverts toward fxSpreadMean over the horizon', () => {
+    const q: MacroParams = { ...P, fxSpread0: 0.3, fxSpreadVol: 0 }
+    const path = macroSampler(q).sample(mulberry32(2), 36)
+    const prem0 = path[0]!.fx / path[0]!.fxOfficial - 1
+    const prem35 = path[35]!.fx / path[35]!.fxOfficial - 1
+    expect(prem0).toBeLessThan(0.3)
+    expect(prem35).toBeCloseTo(q.fxSpreadMean, 2)
   })
 })
