@@ -239,6 +239,7 @@ export const DEFAULT_MACRO: MacroParams = {
   costInflationVol: 0.02,
   // Real demand growth from returnees (+0.2-0.4 pct/month consumer base) and IMF >10 pct GDP 2026. Brief: 0.004 (-0.003 to +0.008). Estimate.
   ppDriftMonthly: 0.004,
+  // AR(1) noise on purchasing power. No source in the brief (critic pass, 11 Oct 2026): pure estimates until Sky Joud supplies 24-36 months of unit sales (brief section 8, item 1).
   ppShockSd: 0.03,
   ppPersistence: 0.7,
   // Damascus grid 2-6 h/day, pipeline sabotage shocks; brief: gridHoursMean 5, sd 1.5, min 1, max 12. Corroborated on hours; parameters are estimates.
