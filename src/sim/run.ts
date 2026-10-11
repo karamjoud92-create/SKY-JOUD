@@ -11,6 +11,12 @@ export interface RunOptions {
   horizon: number
   seed: number
   checkpoints?: number[]
+  /** Scenario preset key (default "base"). The world both baseline and decision live in. */
+  scenario?: string
+  /** Macro parameter overrides applied to both baseline and decision. */
+  macro?: Record<string, unknown>
+  /** Model parameter overrides applied to BOTH baseline and decision (sensitivity sweeps use this). */
+  params?: Record<string, unknown>
 }
 
 export interface CheckpointRow {
@@ -37,10 +43,12 @@ export interface RunReport {
 export function runDecision(decision: DecisionFile, opts: RunOptions): RunReport {
   const entry = registry[opts.model] as ModelEntry | undefined
   if (!entry) throw new Error(`unknown model "${opts.model}"; known: ${Object.keys(registry).join(', ')}`)
-  const params = decision.params ? entry.mergeParams(entry.defaultParams, decision.params) : entry.defaultParams
+  const shared = opts.params ? entry.mergeParams(entry.defaultParams, opts.params) : entry.defaultParams
+  const params = decision.params ? entry.mergeParams(shared, decision.params) : shared
   const mc = { runs: opts.runs, horizon: opts.horizon, seed: opts.seed }
-  const base = monteCarlo(entry.model, entry.defaultParams, entry.defaultLevers, entry.sampler, mc)
-  const dec = monteCarlo(entry.model, params, leverScheduleFor(entry, decision), entry.sampler, mc)
+  const sampler = entry.sampler(opts.scenario ?? 'base', opts.macro)
+  const base = monteCarlo(entry.model, shared, entry.defaultLevers, sampler, mc)
+  const dec = monteCarlo(entry.model, params, leverScheduleFor(entry, decision), sampler, mc)
   const higher: Record<string, boolean> = {}
   for (const [k, m] of Object.entries(entry.metrics)) higher[k] = m.higherIsBetter
   const comparison = compare(base.runs, dec.runs, higher)
