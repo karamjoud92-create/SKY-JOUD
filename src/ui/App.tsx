@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { FanChart, defaultFormat } from './FanChart'
 import { t, dir, type Lang } from './i18n'
 import { runDecision, type RunReport } from '../sim/run'
@@ -7,10 +7,13 @@ import { registry, type DecisionFile } from '../models/registry'
 import { PRESETS } from '../sim/presets'
 
 const EXAMPLE: DecisionFile = {
-  title: 'Spend less',
+  title: 'Example: spend less each month',
   levers: { spend: 60 },
-  assumptions: ['Example on the smoke-test model; the Sky Joud model replaces it.'],
+  assumptions: ['Example on the placeholder model. The Sky Joud model replaces it when it lands.'],
 }
+
+const BUILD = { commit: __BUILD_COMMIT__, count: __BUILD_COUNT__, time: __BUILD_TIME__ }
+const STAGE = 'Stage 2 of 5: engine, scenarios and tooling done; Sky Joud business model in progress'
 
 function fmtUnit(unit: string): (v: number) => string {
   if (unit === 'prob' || unit === 'pct') return v => `${(v * 100).toFixed(0)}%`
@@ -33,6 +36,8 @@ export function App() {
   document.documentElement.lang = lang
 
   const entry = registry[modelName]!
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { run() }, [])
   const run = () => {
     try {
       const decision = JSON.parse(decisionText) as DecisionFile
@@ -70,22 +75,23 @@ export function App() {
         </div>
         <button onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}>{t(lang, 'language')}</button>
       </header>
+      <div className="status">
+        <span className="pill">build {BUILD.count}</span>
+        <span>{BUILD.time}</span>
+        <span>commit {BUILD.commit}</span>
+        <span>{STAGE}</span>
+      </div>
 
       <div className="grid" style={{ marginBottom: 16 }}>
         <div className="card">
           <h2>{t(lang, 'decision')}</h2>
-          <textarea
-            value={decisionText}
-            onChange={e => setDecisionText(e.target.value)}
-            rows={12}
-            style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 13, background: 'var(--bg)', color: 'var(--fg)', border: '1px solid var(--border)', borderRadius: 8, padding: 8, direction: 'ltr' }}
-          />
+          <textarea id="decision" className="code" value={decisionText} onChange={e => setDecisionText(e.target.value)} rows={12} />
           <div className="row" style={{ marginTop: 8 }}>
-            <label className="field">model<select value={modelName} onChange={e => setModelName(e.target.value)}>{Object.keys(registry).map(k => <option key={k} value={k}>{k}</option>)}</select></label>
-            <label className="field">{t(lang, 'runs')}<input type="number" value={runs} min={10} max={5000} onChange={e => setRuns(Number(e.target.value))} /></label>
-            <label className="field">{t(lang, 'horizon')}<input type="number" value={horizon} min={6} max={60} onChange={e => setHorizon(Number(e.target.value))} /></label>
-            <label className="field">seed<input type="number" value={seed} onChange={e => setSeed(Number(e.target.value))} /></label>
-            <label className="field">{t(lang, 'scenario')}<select value={scenario} onChange={e => setScenario(e.target.value)}>{Object.values(PRESETS).map(p => <option key={p.key} value={p.key}>{p.label}</option>)}</select></label>
+            <label className="field">model<select id="model" value={modelName} onChange={e => setModelName(e.target.value)}>{Object.keys(registry).map(k => <option key={k} value={k}>{k}</option>)}</select></label>
+            <label className="field">{t(lang, 'runs')}<input id="runs" type="number" value={runs} min={10} max={5000} onChange={e => setRuns(Number(e.target.value))} /></label>
+            <label className="field">{t(lang, 'horizon')}<input id="horizon" type="number" value={horizon} min={6} max={60} onChange={e => setHorizon(Number(e.target.value))} /></label>
+            <label className="field">seed<input id="seed" type="number" value={seed} onChange={e => setSeed(Number(e.target.value))} /></label>
+            <label className="field">{t(lang, 'scenario')}<select id="scenario" value={scenario} onChange={e => setScenario(e.target.value)}>{Object.values(PRESETS).map(p => <option key={p.key} value={p.key}>{p.label}</option>)}</select></label>
             <button className="primary" onClick={run}>{t(lang, 'run')}</button>
             <button onClick={runSensitivity} disabled={!report}>{t(lang, 'sensitivity')}</button>
           </div>
@@ -96,6 +102,7 @@ export function App() {
           <h2>{t(lang, 'results')}</h2>
           {!report && <p className="muted">{entry.description}</p>}
           {report && (
+            <div className="scroll">
             <table>
               <thead>
                 <tr><th>{t(lang, 'month')} {lastMonth}</th><th>{t(lang, 'baseline')}</th><th>{t(lang, 'decision')}</th><th>{t(lang, 'delta')}</th><th>{t(lang, 'winRate')}</th></tr>
@@ -117,6 +124,7 @@ export function App() {
                 })}
               </tbody>
             </table>
+            </div>
           )}
           {report && report.assumptions.length > 0 && (
             <div style={{ marginTop: 12 }}>
@@ -131,6 +139,7 @@ export function App() {
         <div className="card" style={{ marginBottom: 16 }}>
           <h2>{t(lang, 'sensitivity')}: {entry.metrics[sens.metric]!.label}</h2>
           <p className="muted small">{t(lang, 'tornadoHelp')}</p>
+          <div className="scroll">
           <table>
             <thead><tr><th></th><th>low</th><th>Δ at low</th><th>Δ base</th><th>Δ at high</th><th>high</th></tr></thead>
             <tbody>
@@ -140,6 +149,7 @@ export function App() {
               })}
             </tbody>
           </table>
+          </div>
           <p className="small" style={{ marginTop: 12 }}>{t(lang, 'wmbtHelp')}</p>
           <ul className="small">
             {sens.wmbt.map(r => (
