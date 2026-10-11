@@ -204,61 +204,60 @@ export function deterministicMacro(p: MacroParams, horizon: number): MacroMonth[
  * "estimate".
  */
 export const DEFAULT_MACRO: MacroParams = {
-  // Parallel rate ~136 new SYP/USD mid-Sept 2026, official held ~122 since Apr 2026 (brief: Macro, FX rows; corroborated by two lenses).
+  // Parallel rate 135.5-136.5 new SYP/USD mid-Sept 2026; official held at 122 since 26 Apr 2026. Brief section 2 (FX rows), corroborated by two lenses.
+  // Convention: fx0 and dieselUsd0 are both at the PARALLEL rate.
   fx0: 136,
-  // Official weakened ~10% and parallel ~20% Jan-Sept 2026; Aug-Sept +4.5%. ~1.5%/month drift (brief: Macro FX). Estimate.
+  // Parallel +20 pct Jan-Sept 2026, observed 2.3 pct/month log including the Sept jump. Brief: fxDriftMonthly 0.015 (0.008-0.025). Estimate.
   fxDriftMonthly: 0.015,
-  // Monthly swings of several percent outside jumps. Estimate from the 2026 path.
-  fxVolMonthly: 0.04,
-  // Discrete devaluation events: the Sept 2026 fuel shock widened the premium; a break on a bad Hormuz or fiscal path is plausible. Estimate.
-  fxJumpProb: 0.03,
-  fxJumpMean: 0.2,
-  fxJumpSd: 0.1,
-  // Parallel premium ~0% Jan 2026, 7% Aug, 10-12% Sept 2026 (brief: Macro, CBS band row). Mean-reverting, breaches band often.
+  // Brief: fxVolMonthly 0.035 (0.02-0.05). Estimate; no dated daily series retrieved.
+  fxVolMonthly: 0.035,
+  // 10-30 pct moves around shocks (Dec 2024, Sept 2026). Brief: fxJumpProb 0.04 (0.02-0.08), fxJumpMean 0.18 log (0.10-0.25), fxJumpSd 0.08. Estimates.
+  fxJumpProb: 0.04,
+  fxJumpMean: 0.18,
+  fxJumpSd: 0.08,
+  // Parallel premium ~0 pct Jan 2026, 7 pct Aug, 10.6-12 pct Sept 2026; CBS band +-7 pct breached on most stress days. Brief section 2, corroborated.
   fxSpread0: 0.11,
   fxSpreadMean: 0.08,
   fxSpreadReversion: 0.15,
   fxSpreadVol: 0.02,
-  // Importers price in USD and pass depreciation into SYP prices within weeks (brief: Sector, trade credit row). Estimate.
-  costFxPassThrough: 0.6,
-  // CPI 15-30% y/y in 2026 with monthly spikes of 1-6.5%; food ~1.3x headline (brief: Macro inflation rows). 1.8%/month ~ 24%/yr.
-  costInflationMonthly: 0.018,
-  costInflationVol: 0.015,
-  // Real demand growth 5-12%/yr from returns (+0.2-0.4%/month consumer base) and >10% GDP growth (brief: Macro returnee and IMF rows). 0.5%/month.
-  ppDriftMonthly: 0.005,
+  // Import-heavy cost basket; dollar-quoted pricing with SYP settlement. Brief: 0.7 (0.6-0.8). Estimate, single lens.
+  costFxPassThrough: 0.7,
+  // Non-FX component of local cost inflation. Brief: 0.008 (0.004-0.015); with pass-through the total is ~2.0-2.4 pct/month, i.e. 27-33 pct/yr, matching CPI 2026 ~25 pct y/y. Estimate.
+  costInflationMonthly: 0.008,
+  costInflationVol: 0.02,
+  // Real demand growth from returnees (+0.2-0.4 pct/month consumer base) and IMF >10 pct GDP 2026. Brief: 0.004 (-0.003 to +0.008). Estimate.
+  ppDriftMonthly: 0.004,
   ppShockSd: 0.03,
   ppPersistence: 0.7,
-  // Damascus grid 4-6 h/day base, range 2-8, pipeline sabotage shocks (brief: Macro electricity rows; corroborated).
+  // Damascus grid 2-6 h/day, pipeline sabotage shocks; brief: gridHoursMean 5, sd 1.5, min 1, max 12. Corroborated on hours; parameters are estimates.
   gridHoursMean: 5,
   gridHoursSd: 1.5,
   gridHoursMin: 1,
   gridHoursMax: 12,
-  // Diesel 150 new SYP/L industrial, 175 standard, Sept 2026 = $1.10-1.45/L at parallel (brief: Macro fuel row; corroborated). Use 1.25 for a mixed fleet/genset buyer.
-  dieselUsd0: 1.25,
-  // Discrete +28-40% policy jumps happened; model as volatility with fat months. Estimate.
+  // Diesel 150 (industrial) to 175 (standard) new SYP/L from Sept 2026 = 1.10-1.29 USD/L at the parallel rate. Brief: dieselUsd0 1.20, dieselVolMonthly 0.08 (20-40 pct policy steps every 1-3 months). Corroborated price; vol is an estimate.
+  dieselUsd0: 1.2,
   dieselVolMonthly: 0.08,
-  // Port dwell "days to weeks"; Nasib backlog 200-300 trucks; Turkish transloading delays (brief: Sector ports and routes rows). 2 weeks mean. Estimate.
-  customsDelayWeeksMean: 2,
+  // Clearance 7-10 business days average, some goods 5-14 days; single-window centre since Jul 2026. Brief: customsDelayWeeksMean 1.5 (1-3), sd 1.0, customsSpikeProb 0.06, customsSpikeWeeks 3 (valuation disputes, route closures). Low confidence, vendor pages.
+  customsDelayWeeksMean: 1.5,
   customsDelayWeeksSd: 1,
-  // 3-6 significant security/logistics shocks per year closing a route 3-14 days (brief: Sector security row).
-  customsSpikeProb: 0.3,
-  customsSpikeWeeks: 1.5,
-  // Decree 110/2026: ~0% staples, 15% inputs, 40-45% finished processed foods ad valorem on CIF at the official rate. Medium-low confidence; official schedule not accessed. Use 0.3 as a blended F&B importer default.
-  tariffRate0: 0.3,
-  tariffChangeProb: 0.03,
-  tariffChangeSd: 0.08,
-  // Demand shocks from security events and price spikes (brief: Sector security and retail price rows).
-  demandShockProb: 0.1,
+  customsSpikeProb: 0.06,
+  customsSpikeWeeks: 3,
+  // Decree 110/2026 (1 Jun 2026): ~40-45 pct ad valorem on finished processed foods, 15 pct raw oils and inputs, staples exempt; official schedule NOT read, two analytical Arabic sources. This value is the FINISHED-GOODS rate; the business model scales it per product family (inputs ~0.375x, staples 0x). Brief: tariffChangeProb 0.04, tariffChangeSd 0.10 (three regime changes in 20 months).
+  tariffRate0: 0.4,
+  tariffChangeProb: 0.04,
+  tariffChangeSd: 0.1,
+  // 3-6 significant security or logistics shocks per year plus pipeline sabotage. Brief: demandShockProb 0.12 (0.08-0.20), demandShockSd 0.10, demandPersistence 0.6. Estimates.
+  demandShockProb: 0.12,
   demandShockSd: 0.1,
   demandPersistence: 0.6,
-  // Turkish imports undercut local manufacturing 30-40% (low confidence); Gulf entrants 2027+. Index 1 = today's pressure.
+  // Market-wide index, 1 = today. The business model applies 1.15 (1.0-1.3) for own-manufactured lines facing Turkish imports reported 30-40 pct cheaper (low confidence) and 1.0 for imported brands. Brief: competitorPressureVol 0.04 (0.03-0.05).
   competitorPressure0: 1,
-  competitorPressureVol: 0.03,
-  // Shipment disruption: route closures and transloading damage (brief: Sector routes rows). Estimate.
-  supplierDisruptionProb: 0.05,
-  // Calendar seasonality for packaged F&B in Syria: summer beverages up, winter flat. Estimate; replace with company sales history.
+  competitorPressureVol: 0.04,
+  // Route closures (Lebanon 4 days Apr 2026, Jordan truck ban, Hormuz diversions). Brief: 0.06 (0.04-0.12; 0.10-0.15 under a protracted Hormuz closure). Estimate.
+  supplierDisruptionProb: 0.06,
+  // No Syrian monthly F&B seasonality data found in any sweep. Keep until Sky Joud supplies 24+ months of sales. Estimate.
   seasonByMonth: [0.95, 0.95, 1.0, 1.0, 1.0, 1.05, 1.1, 1.1, 1.0, 0.95, 0.95, 0.95],
-  // Ramadan: trade stocks up the month before; consumption of many F&B categories rises during. Estimate; replace with company history.
+  // Ramadan uplift and pre-Ramadan trade stocking. Estimates, unverified; replace with company history.
   ramadanBoost: 1.25,
   preRamadanBoost: 1.15,
   startYear: 2026,
