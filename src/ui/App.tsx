@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react'
 import { FanChart, defaultFormat } from './FanChart'
 import { t, dir, type Lang } from './i18n'
 import { runDecision, type RunReport } from '../sim/run'
+import { tornado, whatMustBeTrue, type TornadoRow, type BreakEven } from '../sim/sensitivity'
 import { registry, type DecisionFile } from '../models/registry'
+import { PRESETS } from '../sim/presets'
 
 const EXAMPLE: DecisionFile = {
   title: 'Spend less',
@@ -21,6 +23,8 @@ export function App() {
   const [runs, setRuns] = useState(300)
   const [horizon, setHorizon] = useState(36)
   const [seed, setSeed] = useState(1)
+  const [scenario, setScenario] = useState('base')
+  const [sens, setSens] = useState<{ metric: string; rows: TornadoRow[]; wmbt: BreakEven[] } | null>(null)
   const [decisionText, setDecisionText] = useState(JSON.stringify(EXAMPLE, null, 2))
   const [report, setReport] = useState<RunReport | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -33,9 +37,10 @@ export function App() {
     try {
       const decision = JSON.parse(decisionText) as DecisionFile
       const t0 = performance.now()
-      const r = runDecision(decision, { model: modelName, runs, horizon, seed })
+      const r = runDecision(decision, { model: modelName, runs, horizon, seed, scenario })
       setElapsed(Math.round(performance.now() - t0))
       setReport(r)
+      setSens(null)
       setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -43,6 +48,17 @@ export function App() {
   }
 
   const headline = useMemo(() => Object.entries(entry.metrics).filter(([, m]) => m.headline !== false), [entry])
+  const runSensitivity = () => {
+    try {
+      const decision = JSON.parse(decisionText) as DecisionFile
+      const metric = headline[0]?.[0] ?? Object.keys(entry.metrics)[0]!
+      const o = { model: modelName, runs: Math.min(runs, 150), horizon, seed, scenario }
+      setSens({ metric, rows: tornado(decision, o, metric), wmbt: whatMustBeTrue(decision, o, metric) })
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
   const lastMonth = report ? report.options.horizon : horizon
 
   return (
@@ -69,7 +85,9 @@ export function App() {
             <label className="field">{t(lang, 'runs')}<input type="number" value={runs} min={10} max={5000} onChange={e => setRuns(Number(e.target.value))} /></label>
             <label className="field">{t(lang, 'horizon')}<input type="number" value={horizon} min={6} max={60} onChange={e => setHorizon(Number(e.target.value))} /></label>
             <label className="field">seed<input type="number" value={seed} onChange={e => setSeed(Number(e.target.value))} /></label>
+            <label className="field">{t(lang, 'scenario')}<select value={scenario} onChange={e => setScenario(e.target.value)}>{Object.values(PRESETS).map(p => <option key={p.key} value={p.key}>{p.label}</option>)}</select></label>
             <button className="primary" onClick={run}>{t(lang, 'run')}</button>
+            <button onClick={runSensitivity} disabled={!report}>{t(lang, 'sensitivity')}</button>
           </div>
           {error && <p className="bad small">{error}</p>}
           {elapsed !== null && <p className="muted small">{elapsed} ms</p>}
@@ -108,6 +126,30 @@ export function App() {
           )}
         </div>
       </div>
+
+      {sens && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h2>{t(lang, 'sensitivity')}: {entry.metrics[sens.metric]!.label}</h2>
+          <p className="muted small">{t(lang, 'tornadoHelp')}</p>
+          <table>
+            <thead><tr><th></th><th>low</th><th>Δ at low</th><th>Δ base</th><th>Δ at high</th><th>high</th></tr></thead>
+            <tbody>
+              {sens.rows.map(r => {
+                const f = fmtUnit(entry.metrics[sens.metric]!.unit)
+                return <tr key={r.path}><td>{r.label}</td><td className="muted">{r.low}</td><td>{f(r.deltaAtLow)}</td><td>{f(r.deltaAtBase)}</td><td>{f(r.deltaAtHigh)}</td><td className="muted">{r.high}</td></tr>
+              })}
+            </tbody>
+          </table>
+          <p className="small" style={{ marginTop: 12 }}>{t(lang, 'wmbtHelp')}</p>
+          <ul className="small">
+            {sens.wmbt.map(r => (
+              <li key={r.path}>
+                <b>{r.label}</b>: {r.direction === 'always_wins' ? t(lang, 'alwaysWins') : r.direction === 'never_wins' ? t(lang, 'neverWins') : `${r.direction === 'wins_above' ? t(lang, 'mustBeAbove') : t(lang, 'mustBeBelow')} ${r.threshold!.toPrecision(3)}`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {report && (
         <div className="grid">

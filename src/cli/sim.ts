@@ -52,7 +52,7 @@ if (flag('tornado') || flag('wmbt')) {
       const text = r.direction === 'always_wins' ? 'wins across the whole range'
         : r.direction === 'never_wins' ? 'never wins inside the range'
         : `${r.label} must be ${r.direction === 'wins_above' ? 'above' : 'below'} ${r.threshold!.toPrecision(3)}`
-      console.log(`  ${r.label.padEnd(28)} ${text}   (win ${(r.winRateAtLow * 100).toFixed(0)}% at ${r.path.split('.').pop()}=${r.winRateAtLow >= 0 ? '' : ''}low, ${(r.winRateAtHigh * 100).toFixed(0)}% at high)`)
+      console.log(`  ${r.label.padEnd(28)} ${text}   (win rate ${(r.winRateAtLow * 100).toFixed(0)}% at the low end, ${(r.winRateAtHigh * 100).toFixed(0)}% at the high end)`)
     }
   }
   process.exit(0)
