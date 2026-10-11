@@ -25,8 +25,10 @@ export interface MacroParams {
   fxSpreadMean: number
   fxSpreadReversion: number
   fxSpreadVol: number
-  /** Share of FX depreciation that passes into local-currency costs within the month. */
+  /** Share of FX depreciation that eventually passes into local-currency costs. */
   costFxPassThrough: number
+  /** First-order lag, months, over which that pass-through arrives (0 = same month). */
+  costFxPassThroughLagMonths: number
   /** Local cost inflation per month independent of FX. */
   costInflationMonthly: number
   costInflationVol: number
@@ -134,6 +136,7 @@ export function macroSampler(p: MacroParams): ScenarioSampler<MacroMonth> {
       let fx = p.fx0
       let spread = p.fxSpread0
       let costIndex = 1
+      let pendingPassThrough = 0
       let ppDev = 0
       let diesel = p.dieselUsd0
       let tariff = p.tariffRate0
@@ -148,7 +151,10 @@ export function macroSampler(p: MacroParams): ScenarioSampler<MacroMonth> {
         fx = fx * Math.exp(fxLogChange)
         spread = clamp(spread + p.fxSpreadReversion * (p.fxSpreadMean - spread) + p.fxSpreadVol * normal(rand), -0.05, 0.6)
         const fxOfficial = fx / (1 + spread)
-        const costGrowth = p.costInflationMonthly + p.costInflationVol * normal(rand) + p.costFxPassThrough * Math.max(0, fxLogChange)
+        pendingPassThrough += p.costFxPassThrough * Math.max(0, fxLogChange)
+        const release = p.costFxPassThroughLagMonths <= 0 ? pendingPassThrough : pendingPassThrough * (1 - Math.exp(-1 / p.costFxPassThroughLagMonths))
+        pendingPassThrough -= release
+        const costGrowth = p.costInflationMonthly + p.costInflationVol * normal(rand) + release
         costIndex = costIndex * Math.exp(Math.max(-0.5, costGrowth))
         ppDev = p.ppPersistence * ppDev + p.ppShockSd * normal(rand)
         const ppIndex = Math.exp(p.ppDriftMonthly * m + ppDev)
@@ -180,11 +186,15 @@ export function deterministicMacro(p: MacroParams, horizon: number): MacroMonth[
   const out: MacroMonth[] = []
   let fx = p.fx0
   let costIndex = 1
+  let pending = 0
   let year = p.startYear
   let cm = p.startMonth
   for (let m = 1; m <= horizon; m++) {
     fx = fx * Math.exp(p.fxDriftMonthly)
-    costIndex = costIndex * Math.exp(p.costInflationMonthly + p.costFxPassThrough * Math.max(0, p.fxDriftMonthly))
+    pending += p.costFxPassThrough * Math.max(0, p.fxDriftMonthly)
+    const release = p.costFxPassThroughLagMonths <= 0 ? pending : pending * (1 - Math.exp(-1 / p.costFxPassThroughLagMonths))
+    pending -= release
+    costIndex = costIndex * Math.exp(p.costInflationMonthly + release)
     out.push({
       month: m, year, calendarMonth: cm, fx, fxOfficial: fx / (1 + p.fxSpreadMean), fxLogChange: p.fxDriftMonthly, jumped: false, costIndex,
       ppIndex: Math.exp(p.ppDriftMonthly * m), gridHours: p.gridHoursMean, dieselUsd: p.dieselUsd0,
@@ -222,6 +232,8 @@ export const DEFAULT_MACRO: MacroParams = {
   fxSpreadVol: 0.02,
   // Import-heavy cost basket; dollar-quoted pricing with SYP settlement. Brief: 0.7 (0.6-0.8). Estimate, single lens.
   costFxPassThrough: 0.7,
+  // Brief L3: pass-through arrives within 1-2 months (first-order). Estimate.
+  costFxPassThroughLagMonths: 1.5,
   // Non-FX component of local cost inflation. Brief: 0.008 (0.004-0.015); with pass-through the total is ~2.0-2.4 pct/month, i.e. 27-33 pct/yr, matching CPI 2026 ~25 pct y/y. Estimate.
   costInflationMonthly: 0.008,
   costInflationVol: 0.02,

@@ -109,3 +109,36 @@ describe('official vs parallel rate', () => {
     expect(prem35).toBeCloseTo(q.fxSpreadMean, 2)
   })
 })
+
+describe('FX pass-through lag', () => {
+  it('a single jump raises costs gradually with a lag and fully with zero lag', () => {
+    const base: MacroParams = { ...P, fxVolMonthly: 0, fxJumpProb: 0, costInflationVol: 0, costInflationMonthly: 0, fxDriftMonthly: 0 }
+    // emulate a one-off 20% depreciation in month 1 via drift on the deterministic path
+    const stepPath = (lag: number) => {
+      const q = { ...base, costFxPassThroughLagMonths: lag }
+      const out: number[] = []
+      let pending = 0
+      let cost = 1
+      for (let m = 1; m <= 12; m++) {
+        const fxLog = m === 1 ? 0.2 : 0
+        pending += q.costFxPassThrough * fxLog
+        const rel = lag <= 0 ? pending : pending * (1 - Math.exp(-1 / lag))
+        pending -= rel
+        cost *= Math.exp(rel)
+        out.push(cost)
+      }
+      return out
+    }
+    const immediate = stepPath(0)
+    const lagged = stepPath(1.5)
+    expect(immediate[0]!).toBeCloseTo(Math.exp(0.7 * 0.2), 9)
+    expect(lagged[0]!).toBeLessThan(immediate[0]!)
+    expect(lagged[11]!).toBeCloseTo(immediate[11]!, 2)
+  })
+  it('sampler with zero lag matches the previous same-month formulation on a deterministic path', () => {
+    const q: MacroParams = { ...P, fxVolMonthly: 0, fxJumpProb: 0, fxSpreadVol: 0, fxSpread0: P.fxSpreadMean, costInflationVol: 0, ppShockSd: 0, gridHoursSd: 0, dieselVolMonthly: 0, customsDelayWeeksSd: 0, customsSpikeProb: 0, tariffChangeProb: 0, demandShockProb: 0, competitorPressureVol: 0, supplierDisruptionProb: 0, costFxPassThroughLagMonths: 0 }
+    const a = macroSampler(q).sample(mulberry32(1), 6)
+    const expected = Math.exp(6 * (q.costInflationMonthly + q.costFxPassThrough * q.fxDriftMonthly))
+    expect(a[5]!.costIndex).toBeCloseTo(expected, 6)
+  })
+})
