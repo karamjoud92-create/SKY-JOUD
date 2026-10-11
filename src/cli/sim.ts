@@ -4,7 +4,9 @@
  */
 import { readFileSync } from 'node:fs'
 import { runDecision, type RunReport } from '../sim/run'
+import { tornado, whatMustBeTrue } from '../sim/sensitivity'
 import { registry, type DecisionFile } from '../models/registry'
+import { PRESETS } from '../sim/presets'
 
 function arg(name: string, def?: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`)
@@ -19,10 +21,40 @@ const opts = {
   runs: Number(arg('runs', '300')),
   horizon: Number(arg('horizon', '36')),
   seed: Number(arg('seed', '1')),
+  scenario: arg('scenario', 'base'),
 }
 
 if (flag('list')) {
-  for (const [k, e] of Object.entries(registry)) console.log(`${k}: ${e.description}`)
+  console.log('Models:')
+  for (const [k, e] of Object.entries(registry)) console.log(`  ${k}: ${e.description}`)
+  console.log('Scenarios:')
+  for (const [k, p] of Object.entries(PRESETS)) console.log(`  ${k}: ${p.label}. ${p.description}`)
+  process.exit(0)
+}
+
+const sensMetric = arg('metric')
+if (flag('tornado') || flag('wmbt')) {
+  const entry = registry[opts.model]!
+  const metric = sensMetric ?? Object.entries(entry.metrics).find(([, m]) => m.headline)?.[0] ?? Object.keys(entry.metrics)[0]!
+  const unit = entry.metrics[metric]!.unit
+  const f = (v: number) => (unit === 'prob' || unit === 'pct') ? `${(v * 100).toFixed(0)}%` : v.toFixed(Math.abs(v) < 10 ? 2 : 0)
+  if (flag('tornado')) {
+    const rows = tornado(decision, opts, metric)
+    if (flag('json')) { console.log(JSON.stringify(rows, null, 2)); process.exit(0) }
+    console.log(`\nTornado on ${entry.metrics[metric]!.label} at month ${opts.horizon} (decision minus do-nothing, p50), one parameter swung at a time:`)
+    for (const r of rows) console.log(`  ${r.label.padEnd(28)} ${String(r.low).padStart(8)} -> ${f(r.deltaAtLow).padStart(10)}   base ${f(r.deltaAtBase).padStart(10)}   ${String(r.high).padStart(8)} -> ${f(r.deltaAtHigh).padStart(10)}   (win ${(r.winRateAtLow * 100).toFixed(0)}% / ${(r.winRateAtHigh * 100).toFixed(0)}%)`)
+  }
+  if (flag('wmbt')) {
+    const rows = whatMustBeTrue(decision, opts, metric)
+    if (flag('json')) { console.log(JSON.stringify(rows, null, 2)); process.exit(0) }
+    console.log(`\nWhat would have to be true for the decision to beat do-nothing on ${entry.metrics[metric]!.label} in at least half the scenarios:`)
+    for (const r of rows) {
+      const text = r.direction === 'always_wins' ? 'wins across the whole range'
+        : r.direction === 'never_wins' ? 'never wins inside the range'
+        : `${r.label} must be ${r.direction === 'wins_above' ? 'above' : 'below'} ${r.threshold!.toPrecision(3)}`
+      console.log(`  ${r.label.padEnd(28)} ${text}   (win ${(r.winRateAtLow * 100).toFixed(0)}% at ${r.path.split('.').pop()}=${r.winRateAtLow >= 0 ? '' : ''}low, ${(r.winRateAtHigh * 100).toFixed(0)}% at high)`)
+    }
+  }
   process.exit(0)
 }
 
